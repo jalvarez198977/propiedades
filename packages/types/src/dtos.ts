@@ -141,6 +141,22 @@ export interface ReorderPhotosDto {
 }
 
 
+export interface PropertyNoteDto {
+  id: string
+  propertyId: string
+  content: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreatePropertyNoteDto {
+  content: string
+}
+
+export interface UpdatePropertyNoteDto {
+  content?: string
+}
+
 export interface PropertyMeterDto {
   id: string
   label: string

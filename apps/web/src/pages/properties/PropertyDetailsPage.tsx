@@ -35,6 +35,7 @@ import { useState, useRef, useEffect } from 'react';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import { formatDate, toLocalDateFormat } from '../../utils/dateUtils';
+import { PropertyNotesTab } from './PropertyNotesTab';
 
 // --- Validation Schemas ---
 const utilitySchema = z.object({
@@ -81,7 +82,13 @@ export default function PropertyDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [activeTab, setActiveTab] = useState<'detalle' | 'gestion'>(searchParams.get('manage') === 'true' ? 'gestion' : 'detalle');
+  const [activeTab, setActiveTab] = useState<'detalle' | 'gestion' | 'notas'>(
+    searchParams.get('tab') === 'notas' 
+      ? 'notas' 
+      : searchParams.get('manage') === 'true' 
+        ? 'gestion' 
+        : 'detalle'
+  );
   const [isAddingUtility, setIsAddingUtility] = useState(false);
   const [isEditingProperty, setIsEditingProperty] = useState(false);
   const [isAssigningTenant, setIsAssigningTenant] = useState(false);
@@ -94,15 +101,28 @@ export default function PropertyDetailsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const manage = searchParams.get('manage') === 'true';
-    setActiveTab(manage ? 'gestion' : 'detalle');
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'notas') {
+      setActiveTab('notas');
+    } else {
+      const manage = searchParams.get('manage') === 'true';
+      setActiveTab(manage ? 'gestion' : 'detalle');
+    }
   }, [searchParams]);
 
-  const handleTabChange = (tab: 'detalle' | 'gestion') => {
+  const handleTabChange = (tab: 'detalle' | 'gestion' | 'notas') => {
     setActiveTab(tab);
     setSearchParams(prev => {
-      if (tab === 'gestion') prev.set('manage', 'true');
-      else prev.delete('manage');
+      if (tab === 'gestion') {
+        prev.set('manage', 'true');
+        prev.delete('tab');
+      } else if (tab === 'notas') {
+        prev.set('tab', 'notas');
+        prev.delete('manage');
+      } else {
+        prev.delete('manage');
+        prev.delete('tab');
+      }
       return prev;
     });
   };
@@ -365,6 +385,23 @@ export default function PropertyDetailsPage() {
           >
             🔧 Gestión de Pagos
           </button>
+          <button 
+            onClick={() => handleTabChange('notas')}
+            style={{ 
+              padding: '0.5rem 1.25rem', 
+              borderRadius: '0.5rem', 
+              border: 'none', 
+              fontSize: '0.875rem', 
+              fontWeight: 700,
+              cursor: 'pointer',
+              backgroundColor: activeTab === 'notas' ? 'white' : 'transparent',
+              color: activeTab === 'notas' ? 'var(--primary)' : 'var(--text-muted)',
+              boxShadow: activeTab === 'notas' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none',
+              transition: 'all 0.2s'
+            }}
+          >
+            📝 Block de Notas
+          </button>
         </div>
       </div>
 
@@ -502,7 +539,7 @@ export default function PropertyDetailsPage() {
             )}
           </div>
         </div>
-      ) : (
+      ) : activeTab === 'gestion' ? (
         <div className="flex flex-col lg:grid" style={{ gridTemplateColumns: window.innerWidth < 1024 ? '1fr' : '2fr 1fr', gap: window.innerWidth < 768 ? '1.5rem' : '3rem' }}>
           {/* Left Column: Utilities & Meters */}
           <div className="flex flex-col gap-8">
@@ -1020,6 +1057,10 @@ export default function PropertyDetailsPage() {
               </div>
             </div>
           </div>
+        </div>
+      ) : (
+        <div className="max-w-4xl mx-auto">
+          <PropertyNotesTab propertyId={property.id} />
         </div>
       )}
 

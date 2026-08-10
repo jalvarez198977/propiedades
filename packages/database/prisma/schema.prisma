@@ -108,6 +108,7 @@ model Property {
   photos          PropertyPhoto[]
   tenants         PropertyTenant[]
   utilities       Utility[]
+  notesList       PropertyNote[]
 
   @@index([userId])
   @@index([organizationId])
@@ -291,6 +292,18 @@ model Notification {
   @@index([userId])
   @@index([isRead])
   @@map("notifications")
+}
+
+model PropertyNote {
+  id         String   @id @default(uuid())
+  propertyId String
+  content    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@map("property_notes")
 }
 
 enum UserRole {
