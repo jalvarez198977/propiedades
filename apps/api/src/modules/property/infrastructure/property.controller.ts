@@ -161,8 +161,12 @@ export class PropertyController {
   @Patch(':id/tenancy/:tenancyId/monthly-rent')
   @RequireRole(OrganizationRole.ADMIN, OrganizationRole.EDITOR)
   @ApiOperation({ summary: 'Actualizar el canon de arriendo mensual' })
-  async updateMonthlyRent(@Param('tenancyId') tenancyId: string, @Body('amount') amount: number) {
-    return this.propertyRepo.updateMonthlyRent(tenancyId, amount);
+  async updateMonthlyRent(
+    @Param('tenancyId') tenancyId: string, 
+    @Body('amount') amount: number,
+    @Body('isIpcAdjustment') isIpcAdjustment?: boolean
+  ) {
+    return this.propertyRepo.updateMonthlyRent(tenancyId, amount, isIpcAdjustment);
   }
 
   @Patch(':id/tenancy/:tenancyId/tenant')

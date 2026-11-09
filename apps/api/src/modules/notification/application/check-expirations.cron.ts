@@ -22,6 +22,7 @@ export class CheckExpirationsCron {
     await this.checkPaymentDueDays();
     await this.checkExpenseReminders();
     await this.checkSecurityDepositDeadlines();
+    await this.checkIpcAdjustments();
   }
 
   private async checkContractExpirations() {
@@ -226,6 +227,83 @@ export class CheckExpirationsCron {
           subject: `⚠️ ${title}: ${tenancy.tenant.name}`,
           html: this.wrapHtml(title, message, tenancy.property.address),
         });
+      }
+    }
+  }
+
+  private async checkIpcAdjustments() {
+    const activeTenancies = await this.prisma.propertyTenant.findMany({
+      where: {
+        isActive: true,
+        ipcAdjustmentMonths: { not: null, gt: 0 },
+      },
+      include: {
+        property: {
+          include: {
+            user: true,
+            organization: true,
+          }
+        },
+        tenant: true,
+      }
+    });
+
+    const now = new Date();
+
+    for (const tenancy of activeTenancies) {
+      const intervalMonths = tenancy.ipcAdjustmentMonths || 6;
+      let nextAdjDate = tenancy.lastIpcAdjustmentDate 
+        ? new Date(tenancy.lastIpcAdjustmentDate) 
+        : new Date(tenancy.startDate);
+      
+      nextAdjDate.setMonth(nextAdjDate.getMonth() + intervalMonths);
+
+      if (!tenancy.lastIpcAdjustmentDate) {
+        while (nextAdjDate.getTime() + intervalMonths * 30 * 24 * 60 * 60 * 1000 < now.getTime()) {
+          nextAdjDate.setMonth(nextAdjDate.getMonth() + intervalMonths);
+        }
+      }
+
+      const diffTime = nextAdjDate.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      // Trigger if due within 15 days or overdue
+      if (diffDays <= 15) {
+        // Prevent daily duplicate notifications: check if an IPC notification for this property was sent in the last 15 days
+        const recentNotif = await this.prisma.notification.findFirst({
+          where: {
+            userId: tenancy.property.userId,
+            type: NotificationType.IPC_ADJUSTMENT,
+            message: { contains: tenancy.property.address },
+            createdAt: {
+              gte: new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000),
+            }
+          }
+        });
+
+        if (recentNotif) continue;
+
+        const isOverdue = diffDays < 0;
+        const currentRentFormatted = Number(tenancy.monthlyRent).toLocaleString('es-CL');
+        const title = isOverdue ? 'Reajuste IPC de Arriendo Vencido' : 'Próximo Reajuste IPC de Arriendo';
+        const message = isOverdue 
+          ? `Atención: El canon de arriendo de la propiedad en ${tenancy.property.address} (${tenancy.tenant.name}) cumplió ${intervalMonths} meses sin reajuste (Vencido hace ${Math.abs(diffDays)} días). Canon actual: $${currentRentFormatted}.`
+          : `Recordatorio: En ${diffDays} días corresponde aplicar el reajuste semestral de IPC a la propiedad en ${tenancy.property.address} (${tenancy.tenant.name}). Canon actual: $${currentRentFormatted}.`;
+
+        await this.notificationRepo.create({
+          userId: tenancy.property.userId,
+          type: NotificationType.IPC_ADJUSTMENT,
+          title,
+          message,
+        });
+
+        if (tenancy.property.user?.email) {
+          await this.emailService.send({
+            to: tenancy.property.user.email,
+            subject: `📈 ${title}: ${tenancy.property.address}`,
+            html: this.wrapHtml(title, message, tenancy.property.address),
+          });
+        }
       }
     }
   }

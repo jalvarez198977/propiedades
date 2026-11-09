@@ -6,7 +6,7 @@ import { es } from 'date-fns/locale';
 
 interface Notification {
   id: string;
-  type: 'EXPIRATION' | 'PAYMENT_DUE' | 'SYSTEM';
+  type: 'EXPIRATION' | 'PAYMENT_DUE' | 'EXPENSE_DUE' | 'IPC_ADJUSTMENT' | 'SYSTEM';
   title: string;
   message: string;
   isRead: boolean;
@@ -138,7 +138,7 @@ export default function NotificationCenter() {
                   <div className="flex justify-between items-start" style={{ marginBottom: '0.25rem' }}>
                     <div style={{ fontWeight: 700, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <span style={{ fontSize: '1rem' }}>
-                        {n.type === 'EXPIRATION' ? '⌛' : n.type === 'PAYMENT_DUE' ? '💰' : '🔔'}
+                        {n.type === 'EXPIRATION' ? '⌛' : n.type === 'PAYMENT_DUE' ? '💰' : n.type === 'IPC_ADJUSTMENT' ? '📈' : '🔔'}
                       </span>
                       {n.title}
                     </div>

@@ -204,6 +204,8 @@ model PropertyTenant {
   isSecurityDepositReturned Boolean   @default(false)
   isActive                  Boolean   @default(true)
   contractUrl               String?
+  lastIpcAdjustmentDate     DateTime?
+  ipcAdjustmentMonths       Int?      @default(6)
   createdAt                 DateTime  @default(now())
   updatedAt                 DateTime  @updatedAt
   payments                  Payment[]
@@ -365,5 +367,6 @@ enum NotificationType {
   EXPIRATION
   PAYMENT_DUE
   EXPENSE_DUE
+  IPC_ADJUSTMENT
   SYSTEM
 }

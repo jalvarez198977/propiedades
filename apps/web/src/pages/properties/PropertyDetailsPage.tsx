@@ -31,7 +31,7 @@ import {
 import toast from 'react-hot-toast';
 import { useOrganization } from '../../providers/OrganizationProvider';
 import api from '@/api/axios';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import { formatDate, toLocalDateFormat } from '../../utils/dateUtils';
@@ -156,6 +156,37 @@ export default function PropertyDetailsPage() {
     },
     placeholderData: keepPreviousData
   });
+
+  const ipcStatus = useMemo(() => {
+    if (!activeTenancy) return null;
+    const intervalMonths = activeTenancy.ipcAdjustmentMonths ?? 6;
+    if (intervalMonths <= 0) return null;
+
+    const baseDate = activeTenancy.lastIpcAdjustmentDate 
+      ? new Date(activeTenancy.lastIpcAdjustmentDate) 
+      : new Date(activeTenancy.startDate);
+
+    let nextDate = new Date(baseDate);
+    nextDate.setMonth(nextDate.getMonth() + intervalMonths);
+    
+    const now = new Date();
+    if (!activeTenancy.lastIpcAdjustmentDate) {
+      while (nextDate.getTime() + intervalMonths * 30 * 24 * 60 * 60 * 1000 < now.getTime()) {
+        nextDate.setMonth(nextDate.getMonth() + intervalMonths);
+      }
+    }
+    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const targetMidnight = new Date(nextDate.getFullYear(), nextDate.getMonth(), nextDate.getDate());
+    const diffDays = Math.round((targetMidnight.getTime() - todayMidnight.getTime()) / (1000 * 60 * 60 * 24));
+    
+    return {
+      nextDate,
+      diffDays,
+      isDue: diffDays <= 15,
+      isOverdue: diffDays < 0,
+      baseDate,
+    };
+  }, [activeTenancy]);
 
   const queryClient = useQueryClient();
 
@@ -769,6 +800,60 @@ export default function PropertyDetailsPage() {
                       </div>
                     )}
                   </div>
+
+                  {ipcStatus && (
+                    <div style={{
+                      backgroundColor: ipcStatus.isOverdue 
+                        ? 'rgba(239, 68, 68, 0.08)' 
+                        : ipcStatus.isDue 
+                          ? 'rgba(245, 158, 11, 0.08)' 
+                          : 'rgba(99, 102, 241, 0.05)',
+                      border: `1.5px solid ${
+                        ipcStatus.isOverdue 
+                          ? '#ef4444' 
+                          : ipcStatus.isDue 
+                            ? '#f59e0b' 
+                            : 'var(--border)'
+                      }`,
+                      borderRadius: '0.75rem',
+                      padding: '0.85rem 1.25rem',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: '0.75rem',
+                      marginBottom: '1rem',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <span style={{ fontSize: '1.4rem' }}>📈</span>
+                        <div>
+                          <div style={{ fontWeight: 800, fontSize: '0.85rem', color: ipcStatus.isOverdue ? '#dc2626' : ipcStatus.isDue ? '#b45309' : 'var(--text-main)' }}>
+                            {ipcStatus.isOverdue 
+                              ? '⚠️ Reajuste de IPC Vencido (Semestral)' 
+                              : ipcStatus.isDue 
+                                ? '🔔 Próximo Reajuste de IPC (Semestral)' 
+                                : 'Próximo Reajuste de IPC (Semestral)'}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            {ipcStatus.isOverdue 
+                              ? `Cumplió 6 meses el ${formatDate(ipcStatus.nextDate)} (hace ${Math.abs(ipcStatus.diffDays)} días).` 
+                              : ipcStatus.isDue 
+                                ? `Corresponde aplicar reajuste el ${formatDate(ipcStatus.nextDate)} (en ${ipcStatus.diffDays} días).`
+                                : `Próximo reajuste programado para el ${formatDate(ipcStatus.nextDate)}.`}
+                          </div>
+                        </div>
+                      </div>
+                      {canEdit && (
+                        <button 
+                          onClick={() => setIsEditRentOpen(true)}
+                          className={`btn ${ipcStatus.isDue ? 'btn-primary' : 'btn-outline'}`}
+                          style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem' }}
+                        >
+                          {ipcStatus.isDue ? 'Aplicar Reajuste IPC' : 'Modificar Canon'}
+                        </button>
+                      )}
+                    </div>
+                  )}
                   
                   <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
                     <div style={{ backgroundColor: 'white', padding: '1.25rem', borderRadius: '0.75rem', border: '1px solid var(--border-light)' }}>
@@ -2390,6 +2475,7 @@ function SecurityDepositModal({ isOpen, onClose, initialAmount, propertyId, tena
 
 function MonthlyRentModal({ isOpen, onClose, initialAmount, propertyId, tenancyId }: { isOpen: boolean, onClose: () => void, initialAmount: number, propertyId: string, tenancyId: string }) {
   const [amount, setAmount] = useState(initialAmount.toString());
+  const [isIpcAdjustment, setIsIpcAdjustment] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const queryClient = useQueryClient();
 
@@ -2402,7 +2488,10 @@ function MonthlyRentModal({ isOpen, onClose, initialAmount, propertyId, tenancyI
     
     setIsSubmitting(true);
     try {
-      await api.patch(`/properties/${propertyId}/tenancy/${tenancyId}/monthly-rent`, { amount: numericAmount });
+      await api.patch(`/properties/${propertyId}/tenancy/${tenancyId}/monthly-rent`, { 
+        amount: numericAmount,
+        isIpcAdjustment 
+      });
       queryClient.invalidateQueries({ queryKey: ['property', propertyId] });
       queryClient.invalidateQueries({ queryKey: ['active-tenancy', propertyId] });
       toast.success('Canon de arriendo actualizado');
@@ -2434,6 +2523,15 @@ function MonthlyRentModal({ isOpen, onClose, initialAmount, propertyId, tenancyI
               onChange={e => setAmount(e.target.value)}
               style={{ padding: '1rem', borderRadius: '1rem', border: '2px solid var(--border)', fontSize: '1.25rem', fontWeight: 700, width: '100%', textAlign: 'center' }}
             />
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.8rem', cursor: 'pointer', color: 'var(--text-main)', marginTop: '0.25rem' }}>
+              <input 
+                type="checkbox" 
+                checked={isIpcAdjustment} 
+                onChange={e => setIsIpcAdjustment(e.target.checked)} 
+                style={{ width: '16px', height: '16px', accentColor: 'var(--primary)' }}
+              />
+              <span>📈 Registrar como Reajuste de IPC (próxima alarma en 6 meses)</span>
+            </label>
           </div>
           <div className="flex gap-4">
             <button type="button" onClick={onClose} className="btn btn-outline" style={{ flex: 1, padding: '1rem', borderRadius: '1rem', fontWeight: 700 }}>Cancelar</button>
