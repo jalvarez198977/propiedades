@@ -70,26 +70,34 @@ export class ReportController {
       return new Date(dateStr);
     };
 
-    let start: Date;
-    let end: Date;
+    let sDate = startDate;
+    let eDate = endDate;
 
-    if (startDate && endDate) {
-      start = parseChileDate(startDate, false);
-      end = parseChileDate(endDate, true);
-    } else {
+    if (!sDate || !eDate) {
       // Default to today in Chile timezone if dates are missing
       const now = new Date();
       const offsetMin = getChileOffsetMinutes(now);
       const chileLocalTime = new Date(now.getTime() + offsetMin * 60000);
       
       const year = chileLocalTime.getUTCFullYear();
-      const month = chileLocalTime.getUTCMonth();
-      const day = chileLocalTime.getUTCDate();
-      
-      start = new Date(Date.UTC(year, month, day, 0, 0, 0, 0) - offsetMin * 60000);
-      end = new Date(Date.UTC(year, month, day, 23, 59, 59, 999) - offsetMin * 60000);
+      const month = String(chileLocalTime.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(chileLocalTime.getUTCDate()).padStart(2, '0');
+      const todayStr = `${year}-${month}-${day}`;
+
+      sDate = sDate || todayStr;
+      eDate = eDate || todayStr;
     }
 
-    return this.getFinancialStatementUseCase.execute(req.organizationId, start, end);
+    const startUtc = new Date(sDate + 'T00:00:00.000Z');
+    const endUtc = new Date(eDate + 'T23:59:59.999Z');
+    const startChile = parseChileDate(sDate, false);
+    const endChile = parseChileDate(eDate, true);
+
+    return this.getFinancialStatementUseCase.execute(req.organizationId, {
+      startUtc,
+      endUtc,
+      startChile,
+      endChile,
+    });
   }
 }

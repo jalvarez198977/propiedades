@@ -174,7 +174,7 @@ function WithdrawalModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => 
     try {
       await api.post('/utilities/expenses', {
         amount: Number(amount),
-        date: new Date().toISOString(),
+        date: toLocalDateFormat(),
         category: 'Retiro',
         description: description,
       });
@@ -256,15 +256,20 @@ export default function FinancialReportsPage() {
         const diff = today.getDate() - day + (day === 0 ? -6 : 1); 
         start.setDate(diff);
         start.setHours(0, 0, 0, 0);
+        end = new Date(start);
+        end.setDate(start.getDate() + 6);
         break;
       case 'month':
         start = new Date(today.getFullYear(), today.getMonth(), 1);
+        end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
         break;
       case 'year':
         start = new Date(today.getFullYear(), 0, 1);
+        end = new Date(today.getFullYear(), 11, 31);
         break;
       case 'all':
         start = new Date(2000, 0, 1); 
+        end = new Date(today.getFullYear() + 1, 11, 31);
         break;
       case 'custom':
         return `startDate=${customRange.startDate}&endDate=${customRange.endDate}`;

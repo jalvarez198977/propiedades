@@ -2,14 +2,37 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../shared/infrastructure/prisma.service';
 import { FinancialStatementDto, UtilityType, PaymentMethod } from '@propiedades/types';
 
+export interface FinancialStatementDateBounds {
+  startUtc: Date;
+  endUtc: Date;
+  startChile: Date;
+  endChile: Date;
+}
+
 @Injectable()
 export class GetFinancialStatementUseCase {
   constructor(private readonly prisma: PrismaService) {}
 
-  async execute(organizationId: string, startDate: Date, endDate: Date): Promise<FinancialStatementDto> {
-    // Ensure endDate covers the whole day
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
+  async execute(
+    organizationId: string,
+    boundsOrStartDate: FinancialStatementDateBounds | Date,
+    maybeEndDate?: Date,
+  ): Promise<FinancialStatementDto> {
+    let bounds: FinancialStatementDateBounds;
+    if (boundsOrStartDate instanceof Date) {
+      const end = new Date(maybeEndDate || boundsOrStartDate);
+      end.setHours(23, 59, 59, 999);
+      bounds = {
+        startUtc: boundsOrStartDate,
+        endUtc: end,
+        startChile: boundsOrStartDate,
+        endChile: end,
+      };
+    } else {
+      bounds = boundsOrStartDate;
+    }
+
+    const { startUtc, endUtc, startChile, endChile } = bounds;
 
     // 1. Fetch Income (Payments)
     const payments = await this.prisma.payment.findMany({
@@ -18,8 +41,8 @@ export class GetFinancialStatementUseCase {
           property: { organizationId }
         },
         paymentDate: {
-          gte: startDate,
-          lte: end,
+          gte: startUtc,
+          lte: endUtc,
         },
       },
       include: {
@@ -39,8 +62,8 @@ export class GetFinancialStatementUseCase {
       where: {
         property: { organizationId },
         OR: [
-          { billingMonth: { gte: startDate, lte: end } },
-          { billingMonth: null, createdAt: { gte: startDate, lte: end } }
+          { billingMonth: { gte: startUtc, lte: endUtc } },
+          { billingMonth: null, createdAt: { gte: startChile, lte: endChile } }
         ]
       },
       include: {
@@ -54,7 +77,7 @@ export class GetFinancialStatementUseCase {
     const expenses = await this.prisma.expense.findMany({
       where: {
         organizationId,
-        date: { gte: startDate, lte: end },
+        date: { gte: startUtc, lte: endUtc },
       },
       include: {
         property: true,
@@ -128,8 +151,8 @@ export class GetFinancialStatementUseCase {
 
     return {
       period: {
-        startDate: startDate.toISOString(),
-        endDate: end.toISOString(),
+        startDate: startUtc.toISOString(),
+        endDate: endUtc.toISOString(),
       },
       summary: {
         totalIncome,
