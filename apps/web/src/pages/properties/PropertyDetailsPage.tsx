@@ -97,6 +97,7 @@ export default function PropertyDetailsPage() {
   const [isChangeTenantOpen, setIsChangeTenantOpen] = useState(false);
   const [isTerminateModalOpen, setIsTerminateModalOpen] = useState(false);
   const [isEditStartDateOpen, setIsEditStartDateOpen] = useState(false);
+  const [isEditEndDateOpen, setIsEditEndDateOpen] = useState(false);
   const [returnDepositTenancy, setReturnDepositTenancy] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -952,7 +953,17 @@ export default function PropertyDetailsPage() {
                         <div style={{ fontWeight: 800 }}>{formatDate(activeTenancy.startDate)}</div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>TÉRMINO</div>
+                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', alignItems: 'center' }}>
+                          <span>TÉRMINO</span>
+                          {canEdit && (
+                            <button 
+                              onClick={() => setIsEditEndDateOpen(true)}
+                              style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: '0.6rem', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                            >
+                              EDITAR
+                            </button>
+                          )}
+                        </div>
                         <div style={{ fontWeight: 800 }}>{(activeTenancy.endDate || property.contractEndDate) ? formatDate(activeTenancy.endDate || property.contractEndDate) : 'Indefinido'}</div>
                       </div>
                     </div>
@@ -1177,6 +1188,14 @@ export default function PropertyDetailsPage() {
             propertyId={property.id}
             tenancyId={activeTenancy.id}
             initialDate={activeTenancy.startDate}
+          />
+          <EditEndDateModal 
+            key={`enddate-${activeTenancy.id}-${activeTenancy.endDate || property.contractEndDate || ''}`}
+            isOpen={isEditEndDateOpen}
+            onClose={() => setIsEditEndDateOpen(false)}
+            propertyId={property.id}
+            tenancyId={activeTenancy.id}
+            initialDate={activeTenancy.endDate || property.contractEndDate}
           />
           <ChangeTenantModal 
             key={`change-${activeTenancy.id}`}
@@ -2809,6 +2828,84 @@ function EditStartDateModal({ isOpen, onClose, propertyId, tenancyId, initialDat
               onChange={e => setStartDate(e.target.value)}
               style={{ padding: '1.25rem', borderRadius: '1.25rem', border: '2px solid var(--border)', fontSize: '1.25rem', fontWeight: 800, width: '100%', textAlign: 'center', backgroundColor: '#f8fafc' }}
             />
+          </div>
+          <div className="flex gap-4">
+            <button type="button" onClick={onClose} className="btn btn-outline" style={{ flex: 1, padding: '1rem', borderRadius: '1rem', fontWeight: 700 }}>Cancelar</button>
+            <button type="submit" disabled={isSubmitting} className="btn btn-primary" style={{ flex: 1, padding: '1rem', borderRadius: '1rem', fontWeight: 700 }}>
+              {isSubmitting ? 'Guardando...' : 'Guardar'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function EditEndDateModal({ 
+  isOpen, 
+  onClose, 
+  propertyId, 
+  tenancyId, 
+  initialDate 
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  propertyId: string; 
+  tenancyId: string; 
+  initialDate?: string | null; 
+}) {
+  const [endDate, setEndDate] = useState(initialDate ? initialDate.split('T')[0] : '');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const queryClient = useQueryClient();
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      await api.patch(`/properties/${propertyId}/tenancy/${tenancyId}/end-date`, { 
+        endDate: endDate ? endDate : null 
+      });
+      queryClient.invalidateQueries({ queryKey: ['property', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['active-tenancy', propertyId] });
+      toast.success('Fecha de término actualizada');
+      onClose();
+    } catch (e) {
+      toast.error('Error al actualizar fecha de término');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content animate-slide-up" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px', padding: '2.5rem' }}>
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🗓️</div>
+          <h2 className="font-heading" style={{ fontSize: '1.75rem', margin: 0 }}>Término de Contrato</h2>
+          <p className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>Ajusta la fecha de término del arriendo.</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+          <div className="flex flex-col gap-3">
+            <label style={{ fontSize: '0.8rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>Nueva Fecha de Término</label>
+            <input 
+              type="date" 
+              autoFocus
+              value={endDate}
+              onChange={e => setEndDate(e.target.value)}
+              style={{ padding: '1.25rem', borderRadius: '1.25rem', border: '2px solid var(--border)', fontSize: '1.25rem', fontWeight: 800, width: '100%', textAlign: 'center', backgroundColor: '#f8fafc' }}
+            />
+            {endDate && (
+              <button
+                type="button"
+                onClick={() => setEndDate('')}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline', marginTop: '0.25rem' }}
+              >
+                Quitar fecha (Dejar Indefinido)
+              </button>
+            )}
           </div>
           <div className="flex gap-4">
             <button type="button" onClick={onClose} className="btn btn-outline" style={{ flex: 1, padding: '1rem', borderRadius: '1rem', fontWeight: 700 }}>Cancelar</button>

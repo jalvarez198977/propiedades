@@ -13,3 +13,4 @@ CREATE TABLE IF NOT EXISTS "economic_indicators" (
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "economic_indicators_code_year_month_key" ON "economic_indicators"("code", "year", "month");
 CREATE INDEX IF NOT EXISTS "economic_indicators_code_year_month_idx" ON "economic_indicators"("code", "year", "month");
+

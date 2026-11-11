@@ -13,6 +13,7 @@ export interface IPropertyRepository {
   updateMonthlyRent(tenancyId: string, amount: number, isIpcAdjustment?: boolean): Promise<void>;
   updateTenancyTenant(tenancyId: string, tenantId: string): Promise<void>;
   updateTenancyStartDate(tenancyId: string, startDate: Date): Promise<void>;
+  updateTenancyEndDate(tenancyId: string, endDate: Date | null): Promise<void>;
   terminateTenancy(tenancyId: string, data: any): Promise<void>;
   updateTenancyContract(tenancyId: string, contractUrl: string | null): Promise<void>;
 }

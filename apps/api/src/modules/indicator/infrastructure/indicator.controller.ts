@@ -37,3 +37,4 @@ export class IndicatorController {
     return this.indicatorService.syncIpcFromApi();
   }
 }
+

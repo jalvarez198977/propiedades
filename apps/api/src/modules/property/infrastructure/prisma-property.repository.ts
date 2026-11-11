@@ -73,11 +73,21 @@ export class PrismaPropertyRepository implements IPropertyRepository {
   }
 
   async update(id: string, data: any): Promise<Property> {
-    const property = await this.prisma.property.update({
-      where: { id },
-      data,
+    return this.prisma.$transaction(async (tx) => {
+      const property = await tx.property.update({
+        where: { id },
+        data,
+      });
+
+      if (data.contractEndDate !== undefined) {
+        await tx.propertyTenant.updateMany({
+          where: { propertyId: id, isActive: true },
+          data: { endDate: data.contractEndDate },
+        });
+      }
+
+      return this.mapToEntity(property);
     });
-    return this.mapToEntity(property);
   }
 
   async delete(id: string): Promise<void> {
@@ -250,6 +260,21 @@ export class PrismaPropertyRepository implements IPropertyRepository {
     await this.prisma.propertyTenant.update({
       where: { id: tenancyId },
       data: { startDate },
+    });
+  }
+
+  async updateTenancyEndDate(tenancyId: string, endDate: Date | null): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const tenancy = await tx.propertyTenant.update({
+        where: { id: tenancyId },
+        data: { endDate },
+      });
+      if (tenancy.propertyId) {
+        await tx.property.update({
+          where: { id: tenancy.propertyId },
+          data: { contractEndDate: endDate },
+        });
+      }
     });
   }
 
