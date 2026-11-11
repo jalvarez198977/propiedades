@@ -370,3 +370,16 @@ enum NotificationType {
   IPC_ADJUSTMENT
   SYSTEM
 }
+
+model EconomicIndicator {
+  id        String   @id @default(uuid())
+  code      String
+  year      Int
+  month     Int
+  value     Decimal  @db.Decimal(6, 3)
+  createdAt DateTime @default(now())
+
+  @@unique([code, year, month])
+  @@index([code, year, month])
+  @@map("economic_indicators")
+}

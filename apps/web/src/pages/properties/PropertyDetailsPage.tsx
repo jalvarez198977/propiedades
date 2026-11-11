@@ -1159,6 +1159,8 @@ export default function PropertyDetailsPage() {
             initialAmount={Number(activeTenancy.monthlyRent)}
             propertyId={property.id}
             tenancyId={activeTenancy.id}
+            startDate={activeTenancy.startDate}
+            lastIpcAdjustmentDate={activeTenancy.lastIpcAdjustmentDate}
           />
           <SecurityDepositModal 
             key={`deposit-${activeTenancy.id}-${activeTenancy.securityDeposit}`}
@@ -2473,11 +2475,53 @@ function SecurityDepositModal({ isOpen, onClose, initialAmount, propertyId, tena
   );
 }
 
-function MonthlyRentModal({ isOpen, onClose, initialAmount, propertyId, tenancyId }: { isOpen: boolean, onClose: () => void, initialAmount: number, propertyId: string, tenancyId: string }) {
+function MonthlyRentModal({ 
+  isOpen, 
+  onClose, 
+  initialAmount, 
+  propertyId, 
+  tenancyId,
+  startDate,
+  lastIpcAdjustmentDate
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  initialAmount: number; 
+  propertyId: string; 
+  tenancyId: string;
+  startDate?: string;
+  lastIpcAdjustmentDate?: string | null;
+}) {
   const [amount, setAmount] = useState(initialAmount.toString());
   const [isIpcAdjustment, setIsIpcAdjustment] = useState(true);
+  const [customPct, setCustomPct] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const queryClient = useQueryClient();
+
+  // Consulta automática del cálculo de IPC para este contrato
+  const { data: ipcData, isLoading: isLoadingIpc } = useQuery({
+    queryKey: ['ipc-calculate', initialAmount, startDate, lastIpcAdjustmentDate],
+    queryFn: async () => {
+      const resp = await api.get(`/indicators/ipc/calculate?currentRent=${initialAmount}&months=6`);
+      return resp.data;
+    },
+    enabled: isOpen,
+  });
+
+  // Cuando carga la información oficial de IPC, prellenar el porcentaje si está vacío
+  useEffect(() => {
+    if (ipcData?.cumulativePercentage !== undefined && customPct === '') {
+      setCustomPct(ipcData.cumulativePercentage.toString());
+    }
+  }, [ipcData, customPct]);
+
+  // Cálculo en vivo según el porcentaje ingresado o el oficial
+  const activePct = customPct !== '' ? parseFloat(customPct) : (ipcData?.cumulativePercentage ?? 0);
+  const calculatedSuggested = !isNaN(activePct) 
+    ? Math.round(initialAmount * (1 + activePct / 100)) 
+    : initialAmount;
+  const calculatedRounded = Math.round(calculatedSuggested / 1000) * 1000;
+  const diffAmount = calculatedSuggested - initialAmount;
 
   if (!isOpen) return null;
 
@@ -2505,23 +2549,126 @@ function MonthlyRentModal({ isOpen, onClose, initialAmount, propertyId, tenancyI
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content animate-slide-up" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px', padding: '2.5rem' }}>
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>💰</div>
-          <h2 className="font-heading" style={{ fontSize: '1.75rem', margin: 0 }}>Canon de Arriendo</h2>
-          <p className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>Actualiza el monto mensual del contrato.</p>
+      <div className="modal-content animate-slide-up" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px', width: '95%', padding: '2rem' }}>
+        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>💰</div>
+          <h2 className="font-heading" style={{ fontSize: '1.5rem', margin: 0 }}>Canon de Arriendo</h2>
+          <p className="text-muted" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>Actualiza el valor mensual y calcula el reajuste por IPC.</p>
         </div>
         
-        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-          <div className="flex flex-col gap-3">
-            <label style={{ fontSize: '0.8rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>Monto Mensual ($)</label>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          {/* Calculadora Automática de IPC */}
+          <div style={{
+            backgroundColor: 'rgba(99, 102, 241, 0.04)',
+            border: '1.5px solid rgba(99, 102, 241, 0.2)',
+            borderRadius: '1rem',
+            padding: '1.25rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.75rem',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800, fontSize: '0.85rem', color: 'var(--primary)' }}>
+                <span>📈</span>
+                <span>Cálculo IPC Semestral Automático</span>
+              </div>
+              {isLoadingIpc && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Consultando INE...</span>}
+            </div>
+
+            {ipcData && (
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.3 }}>
+                Período: <strong>{ipcData.periodLabel}</strong>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                  % IPC Acumulado
+                </label>
+                <div style={{ position: 'relative', marginTop: '0.25rem' }}>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    value={customPct}
+                    onChange={e => setCustomPct(e.target.value)}
+                    placeholder="0.00"
+                    style={{
+                      padding: '0.5rem 1.75rem 0.5rem 0.75rem',
+                      borderRadius: '0.5rem',
+                      border: '1px solid var(--border)',
+                      width: '100%',
+                      fontWeight: 800,
+                      fontSize: '1rem',
+                      color: 'var(--primary)',
+                      background: 'white'
+                    }}
+                  />
+                  <span style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 800, color: 'var(--text-muted)', pointerEvents: 'none' }}>
+                    %
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                  Incremento Estimado
+                </span>
+                <span style={{ fontSize: '1rem', fontWeight: 800, color: '#16a34a', marginTop: '0.35rem' }}>
+                  {diffAmount >= 0 ? `+ $${diffAmount.toLocaleString('es-CL')}` : `- $${Math.abs(diffAmount).toLocaleString('es-CL')}`}
+                </span>
+              </div>
+            </div>
+
+            {/* Botones de Aplicación Rápida */}
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+              <button
+                type="button"
+                onClick={() => setAmount(calculatedSuggested.toString())}
+                className="btn btn-outline"
+                style={{
+                  flex: 1,
+                  padding: '0.4rem 0.5rem',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  borderColor: amount === calculatedSuggested.toString() ? 'var(--primary)' : 'var(--border)',
+                  backgroundColor: amount === calculatedSuggested.toString() ? 'rgba(99, 102, 241, 0.1)' : 'white',
+                }}
+                title="Aplica el valor exacto con decimales de IPC"
+              >
+                Usar ${calculatedSuggested.toLocaleString('es-CL')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAmount(calculatedRounded.toString())}
+                className="btn btn-outline"
+                style={{
+                  flex: 1,
+                  padding: '0.4rem 0.5rem',
+                  fontSize: '0.75rem',
+                  fontWeight: 800,
+                  borderColor: amount === calculatedRounded.toString() ? '#16a34a' : 'var(--border)',
+                  backgroundColor: amount === calculatedRounded.toString() ? 'rgba(22, 163, 74, 0.1)' : 'white',
+                  color: amount === calculatedRounded.toString() ? '#16a34a' : 'inherit',
+                }}
+                title="Redondea a los $1.000 más cercanos"
+              >
+                🎯 Redondear a ${calculatedRounded.toLocaleString('es-CL')}
+              </button>
+            </div>
+          </div>
+
+          {/* Campo de Monto Final */}
+          <div className="flex flex-col gap-2">
+            <label style={{ fontSize: '0.8rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+              Nuevo Canon Mensual ($)
+            </label>
             <input 
               type="number" 
               required 
-              autoFocus
               value={amount}
               onChange={e => setAmount(e.target.value)}
-              style={{ padding: '1rem', borderRadius: '1rem', border: '2px solid var(--border)', fontSize: '1.25rem', fontWeight: 700, width: '100%', textAlign: 'center' }}
+              style={{ padding: '0.9rem', borderRadius: '0.75rem', border: '2px solid var(--border)', fontSize: '1.35rem', fontWeight: 800, width: '100%', textAlign: 'center', color: 'var(--primary)' }}
             />
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.8rem', cursor: 'pointer', color: 'var(--text-main)', marginTop: '0.25rem' }}>
               <input 
@@ -2533,10 +2680,11 @@ function MonthlyRentModal({ isOpen, onClose, initialAmount, propertyId, tenancyI
               <span>📈 Registrar como Reajuste de IPC (próxima alarma en 6 meses)</span>
             </label>
           </div>
-          <div className="flex gap-4">
-            <button type="button" onClick={onClose} className="btn btn-outline" style={{ flex: 1, padding: '1rem', borderRadius: '1rem', fontWeight: 700 }}>Cancelar</button>
-            <button type="submit" disabled={isSubmitting} className="btn btn-primary" style={{ flex: 1, padding: '1rem', borderRadius: '1rem', fontWeight: 700 }}>
-              {isSubmitting ? 'Guardando...' : 'Guardar'}
+
+          <div className="flex gap-3 mt-2">
+            <button type="button" onClick={onClose} className="btn btn-outline" style={{ flex: 1, padding: '0.85rem', borderRadius: '0.75rem', fontWeight: 700 }}>Cancelar</button>
+            <button type="submit" disabled={isSubmitting} className="btn btn-primary" style={{ flex: 1, padding: '0.85rem', borderRadius: '0.75rem', fontWeight: 700 }}>
+              {isSubmitting ? 'Guardando...' : 'Guardar y Aplicar'}
             </button>
           </div>
         </form>

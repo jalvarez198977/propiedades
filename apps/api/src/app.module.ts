@@ -16,6 +16,7 @@ import { OrganizationModule } from './modules/organization/infrastructure/organi
 import { AdminModule } from './modules/admin/admin.module'
 import { BillingModule } from './modules/billing/infrastructure/billing.module'
 import { ExpenseCategoryModule } from './modules/expense-category/infrastructure/expense-category.module'
+import { IndicatorModule } from './modules/indicator/infrastructure/indicator.module'
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { ExpenseCategoryModule } from './modules/expense-category/infrastructure
     NotificationModule,
     BillingModule,
     ExpenseCategoryModule,
+    IndicatorModule,
   ],
 })
 export class AppModule {}
